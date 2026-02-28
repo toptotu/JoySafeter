@@ -164,11 +164,11 @@ function generateCSPHeader(
   // Remove filesystem: because it's not a standard secure scheme
   const schemeSource = 'data: mediastream: blob:'
 
-  // Next.js and third-party library inline script hashes
-  // PublicEnvScript (next-runtime-env) inline script hash
-  const inlineScriptHashes = [
-    "'sha256-z0nb1PpkFco8UDVc/Xq/SKYGByn8TQYxeliFAv309DM='",
-  ]
+  // NOTE:
+  // We intentionally do NOT pin PublicEnvScript by a fixed hash.
+  // `next-runtime-env` injects a script whose contents change when env vars change
+  // (e.g. NEXT_PUBLIC_API_URL differs across deployments). A fixed hash would break
+  // runtime env injection and cause clients to fall back to localhost defaults.
 
   // Get backend API domain from environment variables (for connect-src)
   const backendApiDomains = getBackendApiDomains()
@@ -180,7 +180,7 @@ function generateCSPHeader(
   let cspHeader = `
     default-src 'self' ${csp} ${whiteList};
     connect-src 'self' ${schemeSource} ${backendApiDomains} ${whiteList} http://*.jd.com https://*.jd.com;
-    script-src 'self' ${csp} ${inlineScriptHashes.join(' ')} ${whiteList} 'strict-dynamic';
+    script-src 'self' ${csp} ${whiteList} 'strict-dynamic';
     style-src 'self' 'unsafe-inline' ${whiteList};
     style-src-attr 'unsafe-inline';
     worker-src 'self' blob:;

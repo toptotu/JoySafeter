@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import { headers } from 'next/headers'
 import { PublicEnvScript } from 'next-runtime-env'
 
 import { AppShell } from '@/components/app-shell'
@@ -43,10 +44,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const nonce = headers().get('x-nonce') ?? undefined
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <PublicEnvScript />
+        {/* Pass nonce so CSP can allow runtime env injection */}
+        <PublicEnvScript nonce={nonce as any} />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
