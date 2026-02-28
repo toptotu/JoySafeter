@@ -168,21 +168,51 @@ class OpenAIAPICompatibleProvider(BaseProvider):
                 return False, "API Key不能为空"
 
             base_url = credentials.get("base_url")
+            if not base_url:
+                return False, "Base URL不能为空"
 
-            # 创建一个临时模型实例进行测试
-            model = ChatOpenAI(
-                model=self.PREDEFINED_CHAT_MODELS[0]["name"],
-                api_key=api_key,
-                base_url=base_url,
-                max_retries=3,
-                timeout=5.0,
-            )  # type: ignore[misc]
+            # Validate credentials in a provider-agnostic way.
+            #
+            # Many OpenAI-compatible providers (e.g. DashScope) require provider-specific model names.
+            # If we hardcode a test model here (like "DeepSeek-V3.2"), validation will incorrectly fail.
+            #
+            # Prefer probing the OpenAI-compatible `/models` endpoint under the provided base_url.
+            models_url = base_url.rstrip("/") + "/models"
+            headers = {"Authorization": f"Bearer {api_key}"}
 
-            # 尝试调用API
-            response = await model.ainvoke("Hello, how are you?")
-            if response and response.content:
-                return True, None
-            else:
+            try:
+                import httpx  # type: ignore
+
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get(models_url, headers=headers)
+                    if resp.status_code == 200:
+                        return True, None
+                    # Try to parse a helpful error message
+                    msg = None
+                    try:
+                        data = resp.json()
+                        if isinstance(data, dict):
+                            err = data.get("error")
+                            if isinstance(err, dict):
+                                msg = err.get("message") or err.get("cause")
+                            msg = msg or data.get("message")
+                    except Exception:
+                        msg = None
+                    return False, f"凭据验证失败：HTTP {resp.status_code} - {msg or resp.text}"
+            except Exception:
+                # Fallback: try a minimal chat request with a generic prompt.
+                # This may still fail if the provider requires specific model names,
+                # but provides a secondary signal and a potentially clearer upstream error.
+                model = ChatOpenAI(
+                    model=self.PREDEFINED_CHAT_MODELS[0]["name"],
+                    api_key=api_key,
+                    base_url=base_url,
+                    max_retries=1,
+                    timeout=5.0,
+                )  # type: ignore[misc]
+                response = await model.ainvoke("Hello")
+                if response and getattr(response, "content", None):
+                    return True, None
                 return False, "API调用失败：未收到有效响应"
         except Exception as e:
             return False, _format_validation_error(e)

@@ -82,6 +82,7 @@ export function ModelProviderAddedCard({
           <ModelList
             provider={provider}
             models={providerModels}
+            workspaceId={workspaceId}
             onCollapse={() => setCollapsed(true)}
           />
         )}

@@ -7,16 +7,19 @@ import { Button } from '@/components/ui/button'
 import type { ModelProvider, AvailableModel } from '@/hooks/queries/models'
 import { useTranslation } from '@/lib/i18n'
 
+import { CreateModelDialog } from './create-model-dialog'
 import { ModelListItem } from './model-list-item'
 
 interface ModelListProps {
   provider: ModelProvider
   models: AvailableModel[]
+  workspaceId?: string
   onCollapse: () => void
 }
 
-export function ModelList({ provider, models, onCollapse }: ModelListProps) {
+export function ModelList({ provider, models, workspaceId, onCollapse }: ModelListProps) {
   const { t } = useTranslation()
+  const [showCreateModel, setShowCreateModel] = React.useState(false)
 
   // Sort by default model, default models first
   const sortedModels = [...models].sort((a, b) => {
@@ -35,15 +38,25 @@ export function ModelList({ provider, models, onCollapse }: ModelListProps) {
           <Sparkles size={12} className="text-gray-400" />
           <span>{t('settings.modelsNum', { num: models.length })}</span>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 px-2 text-[10px] text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-          onClick={onCollapse}
-        >
-          <ChevronUp className="mr-1 w-3 h-3" />
-          {t('settings.collapse')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[10px] text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+            onClick={() => setShowCreateModel(true)}
+          >
+            {t('settings.addCustomModel', { defaultValue: '添加模型' })}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[10px] text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+            onClick={onCollapse}
+          >
+            <ChevronUp className="mr-1 w-3 h-3" />
+            {t('settings.collapse')}
+          </Button>
+        </div>
       </div>
 
       {/* Models List */}
@@ -67,6 +80,15 @@ export function ModelList({ provider, models, onCollapse }: ModelListProps) {
           </div>
         )}
       </div>
+
+      {showCreateModel && (
+        <CreateModelDialog
+          providerName={provider.provider_name}
+          workspaceId={workspaceId}
+          open={showCreateModel}
+          onOpenChange={setShowCreateModel}
+        />
+      )}
     </div>
   )
 }
