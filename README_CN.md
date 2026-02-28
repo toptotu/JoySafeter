@@ -602,6 +602,7 @@ bun run dev
 | [后端指南](backend/README.md) | API 参考与后端配置 |
 | [前端指南](frontend/README.md) | 组件库与状态管理 |
 | [Docker 部署指南](deploy/README.md) | 完整的部署指南，包含安装脚本、场景说明和故障排查 |
+| [阿里云 ECS 部署](docs/DEPLOY_ALIYUN_ECS_CN.md) | 在阿里云 ECS 公网部署（Nginx + HTTPS + 安全组） |
 | [开发指南](DEVELOPMENT.md) | 本地开发环境搭建和工作流程 |
 | [贡献指南](CONTRIBUTING.md) | 如何参与项目贡献 |
 | [Pre-commit 设置](.pre-commit-setup.md) | 代码质量检查与 Git Hooks 配置 |
