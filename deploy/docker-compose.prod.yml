@@ -92,6 +92,9 @@ services:
       # Node 环境
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
+      # 前端请求后端的基础地址（必须设置，否则会回退到 http://localhost:8000）
+      # 推荐在 deploy/.env 中设置 NEXT_PUBLIC_API_URL=http://<ECS公网IP>
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     ports:
       - "${FRONTEND_PORT_HOST:-3000}:3000"
     depends_on:
