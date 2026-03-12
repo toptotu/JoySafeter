@@ -179,6 +179,10 @@ volumes:
   backend-files:
     driver: local
     name: joysafeter-backend-files
+  mcpserver-logs:
+    driver: local
+  mcpserver-run:
+    driver: local
 
 networks:
   joysafeter-network:
