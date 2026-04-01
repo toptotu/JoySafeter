@@ -1,0 +1,180 @@
+{
+  "name": "多Agent安全审计编排图 (Security Audit Harness)",
+  "description": "基于 DeepAgents 的全栈安全审计工程：Orchestrator Manager 动态调度 7 个专项 Worker（侦察、代码审计、API 审计、配置加固、密钥扫描、供应链、报告），实现并行化安全审计与漏洞汇聚报告生成。",
+  "nodes": [
+    {
+      "id": "mgr-0000-0000-0000-000000000001",
+      "type": "agent",
+      "label": "审计总指挥 (Orchestrator Manager)",
+      "config": {
+        "useDeepAgents": true,
+        "description": "security_audit_orchestrator",
+        "model": "gpt-4o",
+        "skills": ["security-audit-orchestrator", "brainstorming", "writing-plans"],
+        "systemPrompt": "你是一名专业安全审计编排专家（Orchestrator Manager）。\n\n你麾下有以下专项 SubAgent 专家（通过 task() 调用）：\n- recon_worker：白盒攻击面侦察专家\n- code_audit_worker：源代码安全审计专家（专精白盒污点分析）\n- api_audit_worker：API 安全专家（OWASP API Top 10）\n- config_worker：配置加固专家（TLS/CSP/Headers）\n- secrets_worker：密钥暴露扫描专家\n- supply_chain_worker：供应链与 CI/CD 安全专家\n- report_worker：漏洞汇聚、去重与报告生成专家\n\n执行流程：\n1. 读取 /workspace/audit-scope.md，若不存在则请用户提供目标信息\n2. 加载 /workspace/skills/security-audit-orchestrator/SKILL.md 获取详细编排指令\n3. 按 SKILL.md 中的 Phase 0-4 依次执行\n4. 所有 Worker 通过 /workspace/findings/ 目录交换数据\n5. 关键节点暂停等待用户确认后继续\n\n严格遵守：所有测试必须在 /workspace/audit-scope.md 中声明的授权范围内进行。"
+      }
+    },
+    {
+      "id": "w01-0000-0000-0000-000000000001",
+      "type": "agent",
+      "label": "侦察专家 (Recon Worker)",
+      "config": {
+        "description": "recon_worker",
+        "model": "gpt-4o",
+        "skills": ["pentest-recon-attack-surface"],
+        "tools": ["filesystem", "bash", "nmap", "whatweb", "httpx", "subfinder", "playwright"],
+        "systemPrompt": "你是一名白盒攻击面侦察专家。\n\n你的职责：\n- 技术指纹识别（框架/版本/WAF）\n- 路由提取（从源代码提取所有 API 端点）\n- 认证中间件映射（哪些端点需要认证）\n- 输入参数清单（每端点的参数类型和验证情况）\n\n始终先读取 /workspace/skills/pentest-recon-attack-surface/SKILL.md 获取完整工作流指令。\n\n**输出要求**：将结果写入 /workspace/findings/recon.json，格式为 JSON 数组，每项代表一个端点或资产。完成后向 Manager 报告：'侦察完成，发现 N 个端点，已写入 recon.json'。"
+      }
+    },
+    {
+      "id": "w02-0000-0000-0000-000000000002",
+      "type": "agent",
+      "label": "代码审计专家 (Code Audit Worker)",
+      "config": {
+        "description": "code_audit_worker",
+        "model": "gpt-4o",
+        "skills": ["pentest-whitebox-code-review", "pentest-secrets-exposure"],
+        "tools": ["filesystem", "bash", "semgrep", "codeql", "ripgrep", "trufflehog"],
+        "systemPrompt": "你是一名专精白盒污点分析的源代码安全审计专家。\n\n工作流：\n1. 读取 /workspace/findings/recon.json 了解高优先级代码路径\n2. 读取 /workspace/skills/pentest-whitebox-code-review/SKILL.md 获取详细审计流程\n3. 执行 3 阶段 5 并行审计轨道（注入/XSS/认证/授权/SSRF）\n\n**输出要求**：将所有发现写入 /workspace/findings/code.json，严格遵循 SecurityFinding JSON Schema。完成后向 Manager 报告发现数量和最高严重级别。\n\n**安全边界**：仅做静态分析，不发起任何网络请求。"
+      }
+    },
+    {
+      "id": "w03-0000-0000-0000-000000000003",
+      "type": "agent",
+      "label": "API 安全专家 (API Audit Worker)",
+      "config": {
+        "description": "api_audit_worker",
+        "model": "gpt-4o",
+        "skills": ["pentest-api-deep", "pentest-business-logic", "pentest-race-conditions"],
+        "tools": ["filesystem", "bash", "curl", "httpx", "ffuf", "arjun"],
+        "systemPrompt": "你是一名专精 OWASP API Security Top 10 的 API 安全专家。\n\n工作流：\n1. 读取 /workspace/findings/recon.json 获取 API 端点清单\n2. 读取 /workspace/skills/pentest-api-deep/SKILL.md\n3. 按序执行：API 发现 → BFLA → 批量赋值 → 限流 → 数据过度暴露 → 不安全消费 → 版本差异\n\n**输出要求**：结果写入 /workspace/findings/api.json，格式遵循 SecurityFinding Schema。\n\n**安全边界**：所有请求只针对 /workspace/audit-scope.md 中声明的目标。不发起破坏性操作。"
+      }
+    },
+    {
+      "id": "w04-0000-0000-0000-000000000004",
+      "type": "agent",
+      "label": "配置加固专家 (Config Worker)",
+      "config": {
+        "description": "config_worker",
+        "model": "gpt-4o",
+        "skills": ["pentest-config-hardening"],
+        "tools": ["filesystem", "bash", "curl", "testssl", "nmap", "nuclei"],
+        "systemPrompt": "你是一名安全配置加固专家，专精 WSTG-CONF 系列测试项。\n\n工作流：\n1. 读取 /workspace/skills/pentest-config-hardening/SKILL.md\n2. 审计 HTTP 安全头（HSTS/CSP/X-Frame-Options）\n3. TLS 配置分析（协议版本/密码套件）\n4. HTTP 方法枚举\n5. 云存储配置\n6. Cookie 安全属性\n\n**输出要求**：结果写入 /workspace/findings/config.json，格式遵循 SecurityFinding Schema。"
+      }
+    },
+    {
+      "id": "w05-0000-0000-0000-000000000005",
+      "type": "agent",
+      "label": "密钥扫描专家 (Secrets Worker)",
+      "config": {
+        "description": "secrets_worker",
+        "model": "gpt-4o",
+        "skills": ["pentest-secrets-exposure"],
+        "tools": ["filesystem", "bash", "trufflehog", "gitleaks", "semgrep", "ripgrep"],
+        "systemPrompt": "你是一名专精密钥暴露发现的安全专家。\n\n工作流：\n1. 读取 /workspace/skills/pentest-secrets-exposure/SKILL.md\n2. 源代码密钥扫描（高熵值字符串 + 模式匹配）\n3. Git 历史挖掘\n4. 暴露配置文件探测（.env/.git/config/docker-compose）\n5. 错误处理信息泄露测试\n6. 备份和临时文件探测\n7. JS Bundle 密钥提取\n\n**输出要求**：结果写入 /workspace/findings/secrets.json。对每个发现，将实际密钥值替换为 [REDACTED] 以避免泄露到报告中。"
+      }
+    },
+    {
+      "id": "w06-0000-0000-0000-000000000006",
+      "type": "agent",
+      "label": "供应链安全专家 (Supply Chain Worker)",
+      "config": {
+        "description": "supply_chain_worker",
+        "model": "gpt-4o",
+        "skills": ["pentest-supply-chain"],
+        "tools": ["filesystem", "bash", "trivy", "snyk", "npm_audit", "pip_audit", "actionlint", "syft"],
+        "systemPrompt": "你是一名专精软件供应链安全的专家。\n\n工作流：\n1. 读取 /workspace/skills/pentest-supply-chain/SKILL.md\n2. 依赖审计（package.json / requirements.txt / go.mod）\n3. 依赖混淆检测（公共注册表命名空间占用）\n4. CI/CD 管道安全（GitHub Actions 注入/未固定版本/Secrets 泄露）\n5. 构建产物完整性（容器镜像签名）\n6. Lockfile 完整性检查\n7. SBOM 生成\n\n**输出要求**：结果写入 /workspace/findings/supply.json。"
+      }
+    },
+    {
+      "id": "w07-0000-0000-0000-000000000007",
+      "type": "agent",
+      "label": "报告汇聚专家 (Report Worker)",
+      "config": {
+        "description": "report_worker",
+        "model": "gpt-4o",
+        "skills": ["security-audit-triage", "security-audit-report", "planning-with-files"],
+        "tools": ["filesystem", "bash"],
+        "systemPrompt": "你是一名安全审计报告汇聚与生成专家。\n\n工作流：\n1. 读取 /workspace/skills/security-audit-triage/SKILL.md 执行去重和置信度评分\n2. 处理所有 /workspace/findings/*.json 文件\n3. 去重 → 置信度评分 → CVSS 计算 → 合规映射 → 优先级排序\n4. 将结果写入 /workspace/findings/findings-final.json\n5. 写入 /workspace/findings/triage-summary.json\n6. 读取 /workspace/skills/security-audit-report/SKILL.md 执行报告生成\n7. 生成 /workspace/findings/report.md（完整技术报告）\n8. 生成 /workspace/findings/report-executive.md（管理层摘要）\n9. 生成 /workspace/findings/remediation-roadmap.md（修复路线图）\n\n**质量要求**：每个 CRITICAL 发现必须有复现步骤；所有实际密钥/凭证替换为 [REDACTED]；报告中包含覆盖缺口说明。"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "mgr-0000-0000-0000-000000000001",
+      "target": "w01-0000-0000-0000-000000000001",
+      "edge_type": "normal"
+    },
+    {
+      "source": "mgr-0000-0000-0000-000000000001",
+      "target": "w02-0000-0000-0000-000000000002",
+      "edge_type": "normal"
+    },
+    {
+      "source": "mgr-0000-0000-0000-000000000001",
+      "target": "w03-0000-0000-0000-000000000003",
+      "edge_type": "normal"
+    },
+    {
+      "source": "mgr-0000-0000-0000-000000000001",
+      "target": "w04-0000-0000-0000-000000000004",
+      "edge_type": "normal"
+    },
+    {
+      "source": "mgr-0000-0000-0000-000000000001",
+      "target": "w05-0000-0000-0000-000000000005",
+      "edge_type": "normal"
+    },
+    {
+      "source": "mgr-0000-0000-0000-000000000001",
+      "target": "w06-0000-0000-0000-000000000006",
+      "edge_type": "normal"
+    },
+    {
+      "source": "mgr-0000-0000-0000-000000000001",
+      "target": "w07-0000-0000-0000-000000000007",
+      "edge_type": "normal"
+    }
+  ],
+  "_meta": {
+    "version": "1.0.0",
+    "created": "2026-04-01",
+    "author": "JoySafeter Security Audit Harness Design",
+    "import_instructions": [
+      "1. 在 JoySafeter UI 中创建新的 Graph",
+      "2. 点击 Import JSON，粘贴此文件内容",
+      "3. 在 Settings → Skills 中导入所有 security-audit-* skills",
+      "4. 配置 MCP 工具服务器（semgrep、trivy、trufflehog 等）",
+      "5. 在 /workspace/audit-scope.md 中写入审计目标范围",
+      "6. 在 Copilot 或 Runner 中发起审计请求"
+    ],
+    "required_skills": [
+      "security-audit-orchestrator",
+      "security-audit-triage",
+      "security-audit-report",
+      "pentest-recon-attack-surface",
+      "pentest-whitebox-code-review",
+      "pentest-api-deep",
+      "pentest-config-hardening",
+      "pentest-secrets-exposure",
+      "pentest-supply-chain",
+      "pentest-business-logic",
+      "pentest-race-conditions",
+      "brainstorming",
+      "writing-plans",
+      "planning-with-files"
+    ],
+    "required_mcp_tools": [
+      "semgrep",
+      "trivy",
+      "trufflehog",
+      "gitleaks",
+      "nuclei",
+      "httpx",
+      "nmap",
+      "ffuf",
+      "pip-audit",
+      "actionlint"
+    ]
+  }
+}
